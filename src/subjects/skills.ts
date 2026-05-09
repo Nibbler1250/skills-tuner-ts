@@ -173,6 +173,7 @@ export class SkillsSubject extends BaseSubject {
       }
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, alt.diff_or_content, 'utf8');
+      this.skillsCache = null;
       return { target_path: target, kind: proposal.kind, applied_content: alt.diff_or_content };
     }
 
@@ -185,6 +186,7 @@ export class SkillsSubject extends BaseSubject {
     }
     await copyFile(target, target + '.bak');
     await writeFile(target, alt.diff_or_content, 'utf8');
+    this.skillsCache = null;
     return { target_path: target, kind: proposal.kind, applied_content: alt.diff_or_content };
   }
 

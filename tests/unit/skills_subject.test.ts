@@ -290,3 +290,37 @@ describe('SkillsSubject sanitization', () => {
     expect(sanitized).toContain('[system]');
   });
 });
+
+describe('SkillsSubject cache invalidation', () => {
+  let dir: string;
+  let subject: SkillsSubject;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'skills-cache-'));
+    subject = new SkillsSubject({ scanDirs: [dir] });
+  });
+  afterEach(() => rmSync(dir, { recursive: true }));
+
+  test('skillsCache is invalidated after apply()', async () => {
+    // First load skills cache (empty)
+    const obs = await subject.collectObservations(new Date(0));
+    expect(obs).toHaveLength(0); // triggers cache load
+
+    // Check cache is populated (by accessing private field)
+    const cacheAfterLoad = (subject as unknown as { skillsCache: unknown }).skillsCache;
+    expect(cacheAfterLoad).not.toBeNull();
+
+    // Apply a new_skill proposal
+    const proposal = {
+      id: 1, cluster_id: 'c1', subject: 'skills', kind: 'new_skill',
+      target_path: join(dir, '__new_entity__.md'),
+      alternatives: [{ id: 'A', label: 'my-cache-test-skill', diff_or_content: '---\nname: cache-test\ntriggers: cache-test\n---\n\n# Cache Test\n', tradeoff: '' }],
+      pattern_signature: 'sig', created_at: new Date(),
+    };
+    await subject.apply(proposal, 'A');
+
+    // Cache should be null after apply
+    const cacheAfterApply = (subject as unknown as { skillsCache: unknown }).skillsCache;
+    expect(cacheAfterApply).toBeNull();
+  });
+});
