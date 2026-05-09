@@ -1,0 +1,27 @@
+{
+  "name": "@skills-tuner/core",
+  "version": "0.1.0",
+  "description": "TypeScript port of skills-tuner — Plus-native human-in-loop tuner with pluggable external subjects (Optuna/ML/etc) via stdio JSON-RPC adapter",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit",
+    "lint": "bunx biome check src tests",
+    "build": "bunx tsc"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "commander": "^13.1.0",
+    "js-yaml": "^4.1.0",
+    "simple-git": "^3.27.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.9.3"
+  }
+}
