@@ -38,7 +38,7 @@ describe('TelegramAdapter', () => {
   test('renderProposal POSTs to sendMessage', async () => {
     const { calls, restore } = mockFetch();
     try {
-      const adapter = new TelegramAdapter({ botToken: 'tok123', chatId: '999', baseUrl: 'http://mock' });
+      const adapter = new TelegramAdapter({ botToken: 'tok123', chatId: '999', baseUrl: 'http://mock', allowedUserIds: [0] });
       await adapter.renderProposal(makeProposal());
       expect(calls).toHaveLength(1);
       expect(calls[0]!.url).toContain('/sendMessage');
@@ -49,7 +49,7 @@ describe('TelegramAdapter', () => {
   test('renderProposal includes inline_keyboard with alternatives', async () => {
     const { calls, restore } = mockFetch();
     try {
-      const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', baseUrl: 'http://mock' });
+      const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', baseUrl: 'http://mock', allowedUserIds: [0] });
       await adapter.renderProposal(makeProposal());
       const body = calls[0]!.body;
       const keyboard = (body.reply_markup as { inline_keyboard: unknown[][] }).inline_keyboard;
@@ -63,7 +63,7 @@ describe('TelegramAdapter', () => {
   test('renderProposal includes Refuse and Edit buttons', async () => {
     const { calls, restore } = mockFetch();
     try {
-      const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', baseUrl: 'http://mock' });
+      const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', baseUrl: 'http://mock', allowedUserIds: [0] });
       await adapter.renderProposal(makeProposal());
       const keyboard = (calls[0]!.body.reply_markup as { inline_keyboard: unknown[][] }).inline_keyboard;
       const lastRow = keyboard[1] as Array<{ callback_data: string }>;
@@ -75,7 +75,7 @@ describe('TelegramAdapter', () => {
   test('renderProposal throws on HTTP error', async () => {
     const { restore } = mockFetch(false);
     try {
-      const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', baseUrl: 'http://mock' });
+      const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', baseUrl: 'http://mock', allowedUserIds: [0] });
       await expect(adapter.renderProposal(makeProposal())).rejects.toThrow('failed');
     } finally { restore(); }
   });
@@ -104,9 +104,41 @@ describe('TelegramAdapter', () => {
     const adapter = new TelegramAdapter({
       botToken: 'tok', chatId: '1',
       callbackHandler: async (p) => { received.push(p); },
+      allowedUserIds: [0],
     });
     await adapter.handleCallback('refuse:42', 0);
     expect(received[0]!.action).toBe('refuse');
     expect(received[0]!.alternativeId).toBeUndefined();
   });
+  test('constructor throws if allowedUserIds is empty', () => {
+    expect(() => new TelegramAdapter({ botToken: 'tok', chatId: '1', allowedUserIds: [] })).toThrow('requires at least one allowedUserId');
+  });
+
+  test('handleCallback throws if user not in allowedUserIds', async () => {
+    const adapter = new TelegramAdapter({ botToken: 'tok', chatId: '1', allowedUserIds: [123] });
+    await expect(adapter.handleCallback('apply:42:A', 999)).rejects.toThrow('not in allowedUserIds');
+  });
+
+  test('handleCallback calls verifyProposalFn and throws if false', async () => {
+    const adapter = new TelegramAdapter({
+      botToken: 'tok', chatId: '1',
+      allowedUserIds: [123],
+      verifyProposalFn: async (_id) => false,
+    });
+    await expect(adapter.handleCallback('apply:42:A', 123)).rejects.toThrow('verifyProposalFn rejected');
+  });
+
+  test('handleCallback proceeds if verifyProposalFn returns true', async () => {
+    const received: import('../../src/adapters/base.js').CallbackPayload[] = [];
+    const adapter = new TelegramAdapter({
+      botToken: 'tok', chatId: '1',
+      allowedUserIds: [123],
+      verifyProposalFn: async (_id) => true,
+      callbackHandler: async (p) => { received.push(p); },
+    });
+    await adapter.handleCallback('apply:42:A', 123);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.proposalId).toBe(42);
+  });
+
 });

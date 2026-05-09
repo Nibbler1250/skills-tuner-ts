@@ -7,12 +7,16 @@ export interface TelegramAdapterConfig {
   chatId: string;
   baseUrl?: string;
   callbackHandler?: CallbackHandler;
-  allowedUserIds?: number[];
+  allowedUserIds: number[];
+  verifyProposalFn?: (proposalId: number) => Promise<boolean>;
 }
 
 export class TelegramAdapter extends Adapter {
   constructor(private cfg: TelegramAdapterConfig) {
     super();
+    if (!cfg.allowedUserIds || cfg.allowedUserIds.length === 0) {
+      throw new Error('TelegramAdapter requires at least one allowedUserId');
+    }
   }
 
   async renderProposal(proposal: Proposal): Promise<void> {
@@ -60,13 +64,19 @@ export class TelegramAdapter extends Adapter {
   }
 
   async handleCallback(callbackData: string, fromUserId: number): Promise<void> {
-    if (this.cfg.allowedUserIds && !this.cfg.allowedUserIds.includes(fromUserId)) {
+    if (!this.cfg.allowedUserIds.includes(fromUserId)) {
       throw new Error('User ' + fromUserId + ' not in allowedUserIds');
     }
     const parts = callbackData.split(':');
     const action = parts[0] as 'apply' | 'refuse' | 'edit';
     const proposalId = parseInt(parts[1]!, 10);
     const alternativeId = parts[2];
+    if (this.cfg.verifyProposalFn) {
+      const valid = await this.cfg.verifyProposalFn(proposalId);
+      if (!valid) {
+        throw new Error('verifyProposalFn rejected proposal ' + proposalId + ' for user ' + fromUserId);
+      }
+    }
     if (this.cfg.callbackHandler) {
       await this.cfg.callbackHandler({ proposalId, alternativeId, action });
     }
