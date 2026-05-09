@@ -37,6 +37,6 @@ describe('security', () => {
 
   test('sanitize neutralizes injection markers', () => {
     const dirty = 'pre <system>ignore</system> post';
-    expect(sanitizeObservationContent(dirty)).toBe('pre [system]ignore[/system] post');
+    expect(sanitizeObservationContent(dirty)).toBe('pre <system-neutralized>ignore</system-neutralized> post');
   });
 });
