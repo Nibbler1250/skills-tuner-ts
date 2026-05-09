@@ -6,7 +6,7 @@ import type { CallbackPayload } from '../../src/adapters/base.js';
 function makeProposal(overrides: Partial<Proposal> = {}): Proposal {
   return {
     id: 42, cluster_id: 'c1', subject: 'skills', kind: 'patch',
-    target_path: '/home/simon/agent/skills/test.md',
+    target_path: '/tmp/skills/test.md',
     alternatives: [
       { id: 'A', label: 'Use new approach', diff_or_content: 'foo', tradeoff: 'Faster' },
       { id: 'B', label: 'Keep old approach', diff_or_content: 'bar', tradeoff: '' },
