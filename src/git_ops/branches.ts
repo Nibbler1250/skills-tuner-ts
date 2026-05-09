@@ -20,14 +20,26 @@ export class BranchManager {
     return `tune/proposal-${proposalId}`;
   }
 
-  async createProposalBranch(proposalId: number): Promise<string> {
+  async createProposalBranch(proposalId: number, baseBranch = 'main'): Promise<string> {
     const name = this.branchName(proposalId);
     const branches = await this.git.branchLocal();
     if (branches.all.includes(name)) {
       await this.git.checkout(name);
-    } else {
-      await this.git.checkoutLocalBranch(name);
+      return name;
     }
+    // Always branch from baseBranch (not the current HEAD) so successive
+    // auto-merged proposals don't stack on each other.
+    if (branches.all.includes(baseBranch)) {
+      await this.git.checkout(baseBranch);
+    }
+    await this.git.checkoutLocalBranch(name);
+    return name;
+  }
+
+  // Switch to a specific proposal branch (used before revert)
+  async checkoutProposalBranch(proposalId: number): Promise<string> {
+    const name = this.branchName(proposalId);
+    await this.git.checkout(name);
     return name;
   }
 

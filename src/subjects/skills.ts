@@ -420,8 +420,8 @@ export class SkillsSubject extends BaseSubject {
       .map(o => '- [' + o.signal_type + '] ' + sanitizeObservationContent(o.verbatim)).join('\n');
 
     const alternatives = this.llm
-      ? await this.llmPropose(skillName, skillContent, evidence, cluster).catch(() => this.fallbackAlternatives(skillName, skillContent))
-      : this.fallbackAlternatives(skillName, skillContent);
+      ? await this.llmPropose(skillName, skillContent, evidence, cluster).catch(() => this.fallbackAlternatives(skillName, skillInfo))
+      : this.fallbackAlternatives(skillName, skillInfo);
 
     return {
       id: 0,
@@ -459,11 +459,16 @@ export class SkillsSubject extends BaseSubject {
     ];
   }
 
-  private fallbackAlternatives(skillName: string, skillContent: string) {
+  private fallbackAlternatives(skillName: string, skillInfo: { path: string; frontmatter: any; content: string } | undefined) {
+    // Reconstruct frontmatter block to ensure all alternatives keep triggers/name (anti-data-loss)
+    const fm = skillInfo?.frontmatter ?? {};
+    const triggersList = Array.isArray(fm.triggers) ? fm.triggers : (fm.triggers ? [fm.triggers] : [skillName]);
+    const fmBlock = '---\nname: ' + (fm.name ?? skillName) + '\ntriggers: ' + JSON.stringify(triggersList) + (fm.description ? '\ndescription: ' + JSON.stringify(fm.description) : '') + '\n---\n\n';
+    const body = skillInfo?.content ?? '';
     return [
-      { id: 'A', label: 'Concise version', diff_or_content: '# ' + skillName + '\n\n' + skillContent.slice(0, 500).trim() + '\n', tradeoff: 'Reduces noise, keeps the essentials' },
-      { id: 'B', label: 'Original + examples', diff_or_content: skillContent + '\n\n## Examples\n- Example 1\n- Example 2\n', tradeoff: 'More context, but longer' },
-      { id: 'C', label: 'With explicit triggers', diff_or_content: '---\nname: ' + skillName + '\ntriggers: ' + skillName + '\n---\n\n' + skillContent, tradeoff: 'Adds frontmatter for better detection' },
+      { id: 'A', label: 'Concise version', diff_or_content: fmBlock + '# ' + skillName + '\n\n' + body.slice(0, 500).trim() + '\n', tradeoff: 'Reduces noise, keeps the essentials' },
+      { id: 'B', label: 'Original + examples', diff_or_content: fmBlock + body + '\n\n## Examples\n- Example 1\n- Example 2\n', tradeoff: 'More context, but longer' },
+      { id: 'C', label: 'With explicit triggers (verbose)', diff_or_content: fmBlock + body, tradeoff: 'Frontmatter normalized; body unchanged' },
     ];
   }
 }

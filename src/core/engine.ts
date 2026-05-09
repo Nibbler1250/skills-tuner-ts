@@ -169,6 +169,8 @@ export class Engine {
     if (!commitSha) throw new Error(`No commit SHA recorded for proposal #${proposalId}`);
 
     try {
+      // Checkout the proposal branch so revert applies in the right context
+      await this.branches.checkoutProposalBranch(proposalId);
       await this.branches.revertPatch(commitSha);
       auditLog('reverted', { proposal_id: proposalId, commit_sha: commitSha });
     } catch (err) {
