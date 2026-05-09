@@ -89,11 +89,16 @@ export class Engine {
       auditLog('proposal_created', { proposal_id: signedProposal.id, subject: signedProposal.subject, pattern_signature: signedProposal.pattern_signature });
       proposed++;
 
-      // Auto-merge check
+      // Auto-merge check — high/critical risk_tier subjects never auto-merge
       const subjectCfg = subjectConfig(this.config, subjectName);
       const autoMerge = subjectCfg.auto_merge;
       const shouldAutoMerge = autoMerge === true || (Array.isArray(autoMerge) && autoMerge.includes(signedProposal.kind));
-      if (shouldAutoMerge && signedProposal.alternatives.length > 0) {
+      if (subject.risk_tier === 'high' || subject.risk_tier === 'critical') {
+        if (shouldAutoMerge) {
+          console.warn(`[Engine] Auto-merge blocked: subject ${subjectName} has risk_tier=${subject.risk_tier}`);
+          auditLog('auto_merge_blocked', { proposal_id: signedProposal.id, subject: subjectName, risk_tier: subject.risk_tier });
+        }
+      } else if (shouldAutoMerge && signedProposal.alternatives.length > 0) {
         try {
           await this.applyProposal(signedProposal.id, signedProposal.alternatives[0]!.id);
           autoApplied++;

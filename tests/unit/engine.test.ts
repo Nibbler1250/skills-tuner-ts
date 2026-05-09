@@ -353,4 +353,54 @@ describe('Engine', () => {
   test('applyProposal throws for unknown proposalId', async () => {
     await expect(engine.applyProposal(9999, 'A')).rejects.toThrow('not found');
   });
+  test('high risk_tier subject never auto-merges even if config says auto_merge: true', async () => {
+    class HighRiskSubject extends TunableSubject {
+      readonly name = 'high-risk';
+      readonly risk_tier = 'high' as const;
+      private callCount = 0;
+      async collectObservations(_since: Date): Promise<Observation[]> { return []; }
+      async detectProblems(_obs: Observation[]): Promise<Cluster[]> { return [makeCluster({ subject: 'high-risk' })]; }
+      async proposeChange(_cluster: Cluster): Promise<Proposal> {
+        const sig = 'high-risk-sig-' + (this.callCount++);
+        return { id: 0, cluster_id: 'c', subject: 'high-risk', kind: 'patch', target_path: '/tmp/x.md', alternatives: [{ id: 'A', label: 'x', diff_or_content: 'x', tradeoff: '' }], pattern_signature: sig, created_at: new Date() };
+      }
+      async apply(_p: Proposal, _a: string): Promise<Patch> { return { target_path: '/tmp/x.md', kind: 'patch', applied_content: '' }; }
+      async validate(_patch: Patch): Promise<ValidationResult> { return { valid: true }; }
+    }
+    const reg = new Registry();
+    reg.registerSubject(new HighRiskSubject());
+    const cfg = makeConfig({ subjects: { 'high-risk': { auto_merge: true } } } as Partial<TunerConfig>);
+    const eng = new Engine(cfg, reg, proposals, refused, branches);
+    (eng as unknown as { secret: Buffer }).secret = Buffer.alloc(32);
+
+    const result = await eng.runCycle({ subjectName: 'high-risk' });
+    expect(result.proposed).toBe(1);
+    expect(result.autoApplied).toBe(0);
+  });
+
+  test('critical risk_tier subject never auto-merges even if config says auto_merge: true', async () => {
+    class CriticalRiskSubject extends TunableSubject {
+      readonly name = 'critical-risk';
+      readonly risk_tier = 'critical' as const;
+      private callCount = 0;
+      async collectObservations(_since: Date): Promise<Observation[]> { return []; }
+      async detectProblems(_obs: Observation[]): Promise<Cluster[]> { return [makeCluster({ subject: 'critical-risk' })]; }
+      async proposeChange(_cluster: Cluster): Promise<Proposal> {
+        const sig = 'critical-risk-sig-' + (this.callCount++);
+        return { id: 0, cluster_id: 'c', subject: 'critical-risk', kind: 'patch', target_path: '/tmp/x.md', alternatives: [{ id: 'A', label: 'x', diff_or_content: 'x', tradeoff: '' }], pattern_signature: sig, created_at: new Date() };
+      }
+      async apply(_p: Proposal, _a: string): Promise<Patch> { return { target_path: '/tmp/x.md', kind: 'patch', applied_content: '' }; }
+      async validate(_patch: Patch): Promise<ValidationResult> { return { valid: true }; }
+    }
+    const reg = new Registry();
+    reg.registerSubject(new CriticalRiskSubject());
+    const cfg = makeConfig({ subjects: { 'critical-risk': { auto_merge: true } } } as Partial<TunerConfig>);
+    const eng = new Engine(cfg, reg, proposals, refused, branches);
+    (eng as unknown as { secret: Buffer }).secret = Buffer.alloc(32);
+
+    const result = await eng.runCycle({ subjectName: 'critical-risk' });
+    expect(result.proposed).toBe(1);
+    expect(result.autoApplied).toBe(0);
+  });
+
 });
