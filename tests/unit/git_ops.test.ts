@@ -74,4 +74,9 @@ describe('BranchManager', () => {
     await expect(mgr.commitPatch(patch, proposal, 'A')).rejects.toThrow('refusing to write outside repo');
   });
 
+  test('revertPatch throws on bad SHA', async () => {
+    // Should throw (not silently create empty commit)
+    await expect(mgr.revertPatch('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).rejects.toThrow();
+  });
+
 });

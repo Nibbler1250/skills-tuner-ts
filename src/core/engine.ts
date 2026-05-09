@@ -163,7 +163,12 @@ export class Engine {
     const commitSha = (appliedRecord as typeof appliedRecord & { commit_sha?: string }).commit_sha;
     if (!commitSha) throw new Error(`No commit SHA recorded for proposal #${proposalId}`);
 
-    await this.branches.revertPatch(commitSha);
-    auditLog('reverted', { proposal_id: proposalId, commit_sha: commitSha });
+    try {
+      await this.branches.revertPatch(commitSha);
+      auditLog('reverted', { proposal_id: proposalId, commit_sha: commitSha });
+    } catch (err) {
+      auditLog('revert_failed', { proposal_id: proposalId, commit_sha: commitSha, error: String(err) });
+      throw err;
+    }
   }
 }

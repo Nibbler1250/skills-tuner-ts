@@ -50,11 +50,7 @@ export class BranchManager {
   }
 
   async revertPatch(commitSha: string): Promise<void> {
-    try {
-      await this.git.revert(commitSha, ['--no-edit']);
-    } catch {
-      await this.git.commit(`Revert ${commitSha.slice(0, 8)}`, { '--allow-empty': null });
-    }
+    await this.git.revert(commitSha, ['--no-edit']);
   }
 
   async listProposalBranches(): Promise<string[]> {
