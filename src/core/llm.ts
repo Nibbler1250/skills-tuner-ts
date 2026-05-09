@@ -63,13 +63,13 @@ export class AnthropicApiBackend implements LLMClient {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
 
+  private readonly apiKey: string;
+
   constructor(config: TunerConfig) {
     this.models = config.models;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Anthropic = require('@anthropic-ai/sdk');
     const apiKey = config.llm.api_key ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error('anthropic_api backend requires api_key in config or ANTHROPIC_API_KEY env var');
-    this.client = new Anthropic({ apiKey, maxRetries: 4 });
+    this.apiKey = apiKey;
   }
 
   modelFor(role: Role): string {
@@ -84,6 +84,10 @@ export class AnthropicApiBackend implements LLMClient {
   }
 
   async call(role: Role, system: string, messages: Message[], maxTokens = 4096): Promise<string> {
+    if (!this.client) {
+      const { default: Anthropic } = await import('@anthropic-ai/sdk');
+      this.client = new Anthropic({ apiKey: this.apiKey, maxRetries: 4 });
+    }
     const model = this.modelFor(role);
     const response = await this.client.messages.create({
       model,
