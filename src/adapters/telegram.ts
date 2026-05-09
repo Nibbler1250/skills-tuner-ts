@@ -1,1 +1,82 @@
-export {};
+import { Adapter } from '../core/interfaces.js';
+import type { Proposal } from '../core/types.js';
+import type { CallbackHandler } from './base.js';
+
+export interface TelegramAdapterConfig {
+  botToken: string;
+  chatId: string;
+  baseUrl?: string;
+  callbackHandler?: CallbackHandler;
+  allowedUserIds?: number[];
+}
+
+export class TelegramAdapter extends Adapter {
+  constructor(private cfg: TelegramAdapterConfig) {
+    super();
+  }
+
+  async renderProposal(proposal: Proposal): Promise<void> {
+    const baseUrl = this.cfg.baseUrl ?? 'https://api.telegram.org';
+    const text = this.formatProposalText(proposal);
+    const reply_markup = {
+      inline_keyboard: [
+        proposal.alternatives.map(alt => ({
+          text: 'Apply ' + alt.id + ': ' + alt.label.slice(0, 30),
+          callback_data: 'apply:' + proposal.id + ':' + alt.id,
+        })),
+        [
+          { text: 'Refuse', callback_data: 'refuse:' + proposal.id },
+          { text: 'Edit', callback_data: 'edit:' + proposal.id },
+        ],
+      ],
+    };
+
+    const res = await fetch(baseUrl + '/bot' + this.cfg.botToken + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: this.cfg.chatId,
+        text,
+        parse_mode: 'Markdown',
+        reply_markup,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error('Telegram sendMessage failed: ' + res.status + ' ' + await res.text());
+    }
+  }
+
+  async renderApplyConfirmation(proposal: Proposal, alternativeId: string): Promise<void> {
+    const baseUrl = this.cfg.baseUrl ?? 'https://api.telegram.org';
+    await fetch(baseUrl + '/bot' + this.cfg.botToken + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: this.cfg.chatId,
+        text: 'Applied alt ' + alternativeId + ' on proposal #' + proposal.id + ' (' + proposal.subject + ')',
+        parse_mode: 'Markdown',
+      }),
+    });
+  }
+
+  async handleCallback(callbackData: string, fromUserId: number): Promise<void> {
+    if (this.cfg.allowedUserIds && !this.cfg.allowedUserIds.includes(fromUserId)) {
+      throw new Error('User ' + fromUserId + ' not in allowedUserIds');
+    }
+    const parts = callbackData.split(':');
+    const action = parts[0] as 'apply' | 'refuse' | 'edit';
+    const proposalId = parseInt(parts[1]!, 10);
+    const alternativeId = parts[2];
+    if (this.cfg.callbackHandler) {
+      await this.cfg.callbackHandler({ proposalId, alternativeId, action });
+    }
+  }
+
+  formatProposalText(proposal: Proposal): string {
+    const altLines = proposal.alternatives
+      .map(a => '*' + a.id + '.* ' + a.label + '\n   _' + (a.tradeoff || 'no tradeoff') + '_')
+      .join('\n\n');
+    return 'Proposal #' + proposal.id + ' - ' + proposal.subject + '/' + proposal.kind + '\n\n' +
+           'Target: `' + proposal.target_path + '`\n\n' + altLines;
+  }
+}
