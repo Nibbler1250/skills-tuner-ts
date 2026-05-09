@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import type { Patch, Proposal } from '../core/types.js';
 
@@ -32,7 +32,11 @@ export class BranchManager {
   }
 
   async commitPatch(patch: Patch, proposal: Proposal, alternativeId: string): Promise<string> {
-    const target = patch.target_path.replace(/^~/, homedir());
+    const target = resolve(patch.target_path.replace(/^~/, homedir()));
+    const repoRoot = resolve(this.repoPath);
+    if (!target.startsWith(repoRoot + sep) && target !== repoRoot) {
+      throw new Error(`BranchManager refusing to write outside repo: target=${target}, repo=${repoRoot}`);
+    }
     if (patch.applied_content) {
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, patch.applied_content, 'utf8');

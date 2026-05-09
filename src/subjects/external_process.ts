@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
 import { z } from 'zod';
 import { TunableSubject } from '../core/interfaces.js';
 import {
@@ -18,6 +20,7 @@ import type { RiskTier } from '../core/interfaces.js';
 export interface ExternalProcessConfig {
   name: string;
   command: string[];
+  allowedRoots?: string[];
   riskTier?: RiskTier;
   autoMergeDefault?: boolean;
   supportsCreation?: boolean;
@@ -116,7 +119,21 @@ export class ExternalProcessSubject extends TunableSubject {
 
   async apply(proposal: Proposal, alternativeId: string): Promise<Patch> {
     const result = await this.callMethod('apply', { proposal, alternative_id: alternativeId });
-    return PatchSchema.parse(result);
+    const patch = PatchSchema.parse(result);
+
+    // Path traversal guard
+    const roots = this.opts.allowedRoots;
+    if (!roots || roots.length === 0) {
+      throw new Error(`ExternalProcessSubject '${this.name}' has no allowedRoots configured — external subjects must declare explicit write zones`);
+    }
+    const target = resolve(patch.target_path.replace(/^~/, homedir()));
+    const allowed = roots.map(r => resolve(r.replace(/^~/, homedir())));
+    const safe = allowed.some(root => target.startsWith(root + sep) || target === root);
+    if (!safe) {
+      throw new Error(`ExternalProcessSubject '${this.name}' refusing to write outside allowedRoots: target=${target}, allowedRoots=[${allowed.join(', ')}]`);
+    }
+
+    return patch;
   }
 
   async validate(patch: Patch): Promise<ValidationResult> {

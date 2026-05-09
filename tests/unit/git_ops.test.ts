@@ -67,4 +67,11 @@ describe('BranchManager', () => {
     expect(typeof sha).toBe('string');
     expect(sha.length).toBeGreaterThan(0);
   });
+  test('commitPatch throws on target outside repoPath', async () => {
+    await mgr.createProposalBranch(99);
+    const proposal = makeProposal({ target_path: '/etc/passwd' });
+    const patch = { target_path: '/etc/passwd', kind: 'patch', applied_content: 'evil' };
+    await expect(mgr.commitPatch(patch, proposal, 'A')).rejects.toThrow('refusing to write outside repo');
+  });
+
 });

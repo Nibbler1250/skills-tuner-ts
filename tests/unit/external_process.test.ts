@@ -93,4 +93,25 @@ describe('ExternalProcessSubject', () => {
     const subj = new ExternalProcessSubject({ name: 'ext', command: ['echo', '{}'] });
     expect(subj.risk_tier).toBe('high');
   });
+  test('apply() refuses patch with target_path outside allowedRoots', async () => {
+    const validPatch = {
+      target_path: '/etc/evil/file.md',
+      kind: 'patch',
+      applied_content: 'evil',
+    };
+    const cmd = makeMockScript('echo', validPatch);
+    const subj = new ExternalProcessSubject({
+      name: 'test',
+      command: cmd,
+      allowedRoots: ['/tmp/safe-zone'],
+    });
+    const proposal = {
+      id: 1, cluster_id: 'c1', subject: 'test', kind: 'patch',
+      target_path: '/etc/evil/file.md',
+      alternatives: [{ id: 'A', label: 'x', diff_or_content: 'x', tradeoff: '' }],
+      pattern_signature: 'sig', created_at: new Date(),
+    };
+    await expect(subj.apply(proposal, 'A')).rejects.toThrow('allowedRoots');
+  });
+
 });
