@@ -79,7 +79,7 @@ export class Engine {
       // Assign ID and sign
       const existingRecords = this.proposals.readAll();
       const nextId = existingRecords.length > 0
-        ? Math.max(...existingRecords.map(r => r.proposal.id)) + 1
+        ? Math.max(...existingRecords.map(r => r?.proposal?.id ?? 0)) + 1
         : 1;
       const unsignedProposal: UnsignedProposal = { ...rawProposal, id: nextId };
       const sig = computeProposalSignature(unsignedProposal, this.secret);
@@ -111,7 +111,7 @@ export class Engine {
   }
 
   async applyProposal(proposalId: number, alternativeId: string): Promise<void> {
-    const record = this.proposals.readAll().find(r => r.proposal.id === proposalId && r.event === 'created');
+    const record = this.proposals.readAll().find(r => r?.proposal?.id === proposalId && r.event === 'created');
     if (!record) throw new Error(`Proposal #${proposalId} not found or not pending`);
     const proposal = record.proposal;
 
@@ -147,7 +147,7 @@ export class Engine {
   }
 
   async refuseProposal(proposalId: number, reason = 'refuse'): Promise<void> {
-    const record = this.proposals.readAll().find(r => r.proposal.id === proposalId);
+    const record = this.proposals.readAll().find(r => r?.proposal?.id === proposalId);
     if (!record) throw new Error(`Proposal #${proposalId} not found`);
     const proposal = record.proposal;
 
@@ -157,7 +157,7 @@ export class Engine {
   }
 
   async revertProposal(proposalId: number): Promise<void> {
-    const appliedRecord = this.proposals.readAll().find(r => r.proposal.id === proposalId && r.event === 'applied');
+    const appliedRecord = this.proposals.readAll().find(r => r?.proposal?.id === proposalId && r.event === 'applied');
     if (!appliedRecord) throw new Error(`No applied record found for proposal #${proposalId}`);
 
     const commitSha = (appliedRecord as typeof appliedRecord & { commit_sha?: string }).commit_sha;

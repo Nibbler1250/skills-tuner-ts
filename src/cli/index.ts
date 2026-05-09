@@ -241,7 +241,7 @@ program
     const all = store.readAll();
     const proposalId = parseInt(id, 10);
     if (isNaN(proposalId)) { console.error('id must be a number'); process.exit(1); }
-    const record = all.find(r => r.proposal.id === proposalId);
+    const record = all.find(r => r?.proposal?.id === proposalId);
     if (!record) { console.error(`Proposal #${id} not found`); process.exit(1); }
     if (preferred === 'no') {
       const refused = new RefusedStore(config.storage.refused_jsonl ?? DEFAULT_REFUSED_PATH);
