@@ -24,7 +24,7 @@ describe('BranchManager', () => {
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'tuner-git-'));
     const git = simpleGit(dir);
-    await git.init();
+    await git.init(['-b', 'main']);
     await git.addConfig('user.name', 'Test');
     await git.addConfig('user.email', 'test@test.com');
     writeFileSync(join(dir, 'README.md'), '# test');

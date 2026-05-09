@@ -29,9 +29,12 @@ export class BranchManager {
     }
     // Always branch from baseBranch (not the current HEAD) so successive
     // auto-merged proposals don't stack on each other.
-    if (branches.all.includes(baseBranch)) {
-      await this.git.checkout(baseBranch);
+    if (!branches.all.includes(baseBranch)) {
+      throw new Error(
+        `Base branch '${baseBranch}' not found in repo. Cannot create proposal branch — refusing to branch from current HEAD which would let proposals stack on each other. Set baseBranch explicitly if your repo doesn't use 'main'.`
+      );
     }
+    await this.git.checkout(baseBranch);
     await this.git.checkoutLocalBranch(name);
     return name;
   }

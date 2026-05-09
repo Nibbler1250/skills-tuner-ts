@@ -107,7 +107,7 @@ class MockSubject extends TunableSubject {
 
 async function initGitRepo(dir: string): Promise<void> {
   const git = simpleGit(dir);
-  await git.init();
+  await git.init(['-b', 'main']);
   await git.addConfig('user.email', 'test@test.com');
   await git.addConfig('user.name', 'Test');
   writeFileSync(join(dir, 'README.md'), '# test');

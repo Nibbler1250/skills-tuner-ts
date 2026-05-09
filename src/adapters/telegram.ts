@@ -68,8 +68,17 @@ export class TelegramAdapter extends Adapter {
       throw new Error('User ' + fromUserId + ' not in allowedUserIds');
     }
     const parts = callbackData.split(':');
+    if (parts.length < 2) {
+      throw new Error(`Telegram callback malformed: '${callbackData}' (expected action:id[:alt])`);
+    }
     const action = parts[0] as 'apply' | 'refuse' | 'edit';
-    const proposalId = parseInt(parts[1]!, 10);
+    if (!['apply', 'refuse', 'edit'].includes(action)) {
+      throw new Error(`Telegram callback unknown action: '${action}'`);
+    }
+    const proposalId = Number.parseInt(parts[1]!, 10);
+    if (!Number.isFinite(proposalId) || proposalId < 1) {
+      throw new Error(`Telegram callback invalid proposalId: '${parts[1]}' in '${callbackData}'`);
+    }
     const alternativeId = parts[2];
     if (this.cfg.verifyProposalFn) {
       const valid = await this.cfg.verifyProposalFn(proposalId);
