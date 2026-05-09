@@ -24,7 +24,7 @@ export const AlternativeSchema = z.object({
 });
 export type Alternative = z.infer<typeof AlternativeSchema>;
 
-export const ProposalSchema = z.object({
+export const UnsignedProposalSchema = z.object({
   id: z.number().int(),
   cluster_id: z.string(),
   subject: z.string(),
@@ -33,7 +33,11 @@ export const ProposalSchema = z.object({
   alternatives: z.array(AlternativeSchema).min(1).max(3),
   pattern_signature: z.string(),
   created_at: z.coerce.date(),
-  signature: z.string().optional(),
+});
+export type UnsignedProposal = z.infer<typeof UnsignedProposalSchema>;
+
+export const ProposalSchema = UnsignedProposalSchema.extend({
+  signature: z.string().min(1),
 });
 export type Proposal = z.infer<typeof ProposalSchema>;
 

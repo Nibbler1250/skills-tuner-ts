@@ -1,7 +1,7 @@
 import { computeProposalSignature, verifyProposalSignature, loadSecret, auditLog } from './security.js';
 import { subjectConfig } from './config.js';
 import type { TunerConfig } from './config.js';
-import type { Proposal } from './types.js';
+import type { Proposal, UnsignedProposal } from './types.js';
 import type { TunableSubject } from './interfaces.js';
 import type { Registry } from './registry.js';
 import type { ProposalsStore } from '../storage/proposals.js';
@@ -67,7 +67,7 @@ export class Engine {
     for (const cluster of clusters) {
       if (proposed >= maxPerRun) break;
 
-      const rawProposal = await subject.proposeChange(cluster);
+      const rawProposal: UnsignedProposal = await subject.proposeChange(cluster);
 
       // Dedup checks (anti-spam — bug fix 2351440)
       if (refusedSigs.has(rawProposal.pattern_signature)) continue;
@@ -81,9 +81,9 @@ export class Engine {
       const nextId = existingRecords.length > 0
         ? Math.max(...existingRecords.map(r => r.proposal.id)) + 1
         : 1;
-      const proposal: Proposal = { ...rawProposal, id: nextId };
-      const sig = computeProposalSignature(proposal, this.secret);
-      const signedProposal: Proposal = { ...proposal, signature: sig };
+      const unsignedProposal: UnsignedProposal = { ...rawProposal, id: nextId };
+      const sig = computeProposalSignature(unsignedProposal, this.secret);
+      const signedProposal: Proposal = { ...unsignedProposal, signature: sig };
 
       this.proposals.append({ proposal: signedProposal, event: 'created', ts: new Date().toISOString() });
       auditLog('proposal_created', { proposal_id: signedProposal.id, subject: signedProposal.subject, pattern_signature: signedProposal.pattern_signature });

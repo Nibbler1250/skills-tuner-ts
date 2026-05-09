@@ -7,7 +7,7 @@ import { createReadStream } from 'node:fs';
 import { BaseSubject } from './base.js';
 import { sanitizeObservationContent } from '../core/security.js';
 import { ORPHAN_SUBJECT, CREATE_KINDS } from '../core/interfaces.js';
-import type { Cluster, Observation, Patch, Proposal, ValidationResult } from '../core/types.js';
+import type { Cluster, Observation, Patch, Proposal, UnsignedProposal, ValidationResult } from '../core/types.js';
 import type { LLMClient } from '../core/llm.js';
 
 export const DEFAULT_NEGATIVE_PATTERNS: RegExp[] = [
@@ -146,7 +146,7 @@ export class SkillsSubject extends BaseSubject {
     return clusters;
   }
 
-  async proposeChange(cluster: Cluster): Promise<Proposal> {
+  async proposeChange(cluster: Cluster): Promise<UnsignedProposal> {
     const skillName = cluster.subjects_touched[0] ?? 'unknown';
     if (skillName === ORPHAN_SKILL) {
       return this.proposeNewSkill(cluster);
@@ -387,7 +387,7 @@ export class SkillsSubject extends BaseSubject {
     return new Date();
   }
 
-  private async proposeNewSkill(cluster: Cluster): Promise<Proposal> {
+  private async proposeNewSkill(cluster: Cluster): Promise<UnsignedProposal> {
     const evidence = cluster.observations.slice(0, 6).map(o => '- ' + sanitizeObservationContent(o.verbatim)).join('\n');
     const targetPath = join(this.scanDirs[0]!.replace(/^~/, homedir()), ORPHAN_SKILL + '.md');
 
@@ -407,7 +407,7 @@ export class SkillsSubject extends BaseSubject {
     };
   }
 
-  private async proposePatchForExistingSkill(cluster: Cluster, skillName: string): Promise<Proposal> {
+  private async proposePatchForExistingSkill(cluster: Cluster, skillName: string): Promise<UnsignedProposal> {
     const skills = await this.loadSkillsMap();
     const skillInfo = skills.get(skillName);
     const skillPath = skillInfo?.path ?? join(this.scanDirs[0]!, skillName + '.md');

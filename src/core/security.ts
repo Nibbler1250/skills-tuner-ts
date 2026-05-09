@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, appendFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import type { Proposal } from './types.js';
+import type { Proposal, UnsignedProposal } from './types.js';
 
 export const SECRET_PATH = join(homedir(), '.config', 'tuner', '.secret');
 export const AUDIT_PATH = join(homedir(), '.config', 'tuner', 'audit.jsonl');
@@ -19,7 +19,7 @@ export function loadSecret(): Buffer {
   return readFileSync(SECRET_PATH);
 }
 
-function proposalCanonical(proposal: Proposal): Buffer {
+function proposalCanonical(proposal: UnsignedProposal | Proposal): Buffer {
   const data = {
     alternatives: proposal.alternatives.map(a => ({
       diff_or_content: a.diff_or_content,
@@ -38,7 +38,7 @@ function proposalCanonical(proposal: Proposal): Buffer {
   return Buffer.from(JSON.stringify(data), 'utf8');
 }
 
-export function computeProposalSignature(proposal: Proposal, secret: Buffer): string {
+export function computeProposalSignature(proposal: UnsignedProposal | Proposal, secret: Buffer): string {
   return createHmac('sha256', secret).update(proposalCanonical(proposal)).digest('hex');
 }
 

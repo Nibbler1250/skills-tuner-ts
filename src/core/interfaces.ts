@@ -1,4 +1,4 @@
-import type { Cluster, Observation, Patch, Proposal, ValidationResult } from './types.js';
+import type { Cluster, Observation, Patch, Proposal, UnsignedProposal, ValidationResult } from './types.js';
 import { ORPHAN_SUBJECT } from './types.js';
 
 export type RiskTier = 'low' | 'medium' | 'high' | 'critical';
@@ -12,7 +12,7 @@ export abstract class TunableSubject {
 
   abstract collectObservations(since: Date): Promise<Observation[]>;
   abstract detectProblems(observations: Observation[]): Promise<Cluster[]>;
-  abstract proposeChange(cluster: Cluster): Promise<Proposal>;
+  abstract proposeChange(cluster: Cluster): Promise<UnsignedProposal>;
   abstract apply(proposal: Proposal, alternativeId: string): Promise<Patch>;
   abstract validate(patch: Patch): Promise<ValidationResult>;
 
@@ -31,3 +31,4 @@ export abstract class Adapter {
 }
 
 export { ORPHAN_SUBJECT, CREATE_KINDS } from './types.js';
+export type { UnsignedProposal } from './types.js';

@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { z } from 'zod';
 import { TunableSubject } from '../core/interfaces.js';
 import {
-  ProposalSchema,
+  UnsignedProposalSchema,
   ClusterSchema,
   ObservationSchema,
   PatchSchema,
@@ -12,9 +12,10 @@ import {
   type Cluster,
   type Observation,
   type Patch,
-  type Proposal,
+  type UnsignedProposal,
   type ValidationResult,
 } from '../core/types.js';
+import type { Proposal } from '../core/types.js';
 import type { RiskTier } from '../core/interfaces.js';
 
 export interface ExternalProcessConfig {
@@ -112,9 +113,9 @@ export class ExternalProcessSubject extends TunableSubject {
     return z.array(ClusterSchema).parse(result);
   }
 
-  async proposeChange(cluster: Cluster): Promise<Proposal> {
+  async proposeChange(cluster: Cluster): Promise<UnsignedProposal> {
     const result = await this.callMethod('propose_change', { cluster });
-    return ProposalSchema.parse(result);
+    return UnsignedProposalSchema.parse(result);
   }
 
   async apply(proposal: Proposal, alternativeId: string): Promise<Patch> {
