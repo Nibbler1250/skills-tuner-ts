@@ -8,6 +8,7 @@ export interface ProposalRecord {
   event: 'created' | 'applied' | 'refused';
   ts: string;
   alternative_id?: string;
+  commit_sha?: string;
 }
 
 export const DEFAULT_PROPOSALS_PATH = join(homedir(), '.config', 'tuner', 'proposals.jsonl');
