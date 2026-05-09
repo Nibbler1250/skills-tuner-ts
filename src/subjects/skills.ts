@@ -307,7 +307,9 @@ export class SkillsSubject extends BaseSubject {
       .filter(f => {
         try { return statSync(f).mtimeMs >= sinceMs; } catch { return false; }
       })
-      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+      .map(f => { try { return { f, mtime: statSync(f).mtimeMs }; } catch { return { f, mtime: 0 }; } })
+      .sort((a, b) => b.mtime - a.mtime)
+      .map(x => x.f)
       .slice(0, 50);
   }
 

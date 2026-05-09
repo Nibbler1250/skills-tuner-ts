@@ -78,9 +78,8 @@ export class Engine {
 
       // Assign ID and sign
       const existingRecords = this.proposals.readAll();
-      const nextId = existingRecords.length > 0
-        ? Math.max(...existingRecords.map(r => r?.proposal?.id ?? 0)) + 1
-        : 1;
+      // Use reduce instead of Math.max(...spread) to avoid stack overflow at ~10k+ records
+      const nextId = existingRecords.reduce((max, r) => Math.max(max, r?.proposal?.id ?? 0), 0) + 1;
       const unsignedProposal: UnsignedProposal = { ...rawProposal, id: nextId };
       const sig = computeProposalSignature(unsignedProposal, this.secret);
       const signedProposal: Proposal = { ...unsignedProposal, signature: sig };
