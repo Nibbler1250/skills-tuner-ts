@@ -243,11 +243,13 @@ program
     if (isNaN(proposalId)) { console.error('id must be a number'); process.exit(1); }
     const record = all.find(r => r?.proposal?.id === proposalId);
     if (!record) { console.error(`Proposal #${id} not found`); process.exit(1); }
+    const { auditLog } = await import('../core/security.js');
     if (preferred === 'no') {
       const refused = new RefusedStore(config.storage.refused_jsonl ?? DEFAULT_REFUSED_PATH);
       refused.add(record.proposal.pattern_signature, record.proposal.subject, `feedback:${preferred}`);
+      store.append({ proposal: record.proposal, event: 'refused', ts: new Date().toISOString() });
     }
-    store.append({ proposal: record.proposal, event: 'refused', ts: new Date().toISOString() });
+    auditLog('feedback_recorded', { proposal_id: proposalId, preferred });
     console.log(`📝 Feedback recorded: proposal ${id} → ${preferred}`);
   });
 
@@ -287,7 +289,15 @@ program
     if (!existsSync(targetSkill)) {
       const { fileURLToPath } = await import('node:url');
       const __dirname = resolve(fileURLToPath(import.meta.url), '..');
-      const templateSrc = join(__dirname, '..', '..', 'templates', 'skills', 'tuner.md');
+      // Resolve template across contexts: skills-tuner-ts standalone (templates/skills/) OR
+      // Plus integration context (src/skills-tuner-templates/)
+      const candidates = [
+        join(__dirname, '..', '..', 'templates', 'skills', 'tuner.md'),
+        join(__dirname, '..', '..', '..', 'templates', 'skills', 'tuner.md'),
+        join(__dirname, '..', '..', '..', 'skills-tuner-templates', 'tuner.md'),
+        join(__dirname, '..', '..', 'skills-tuner-templates', 'tuner.md'),
+      ];
+      const templateSrc = candidates.find(p => existsSync(p)) ?? candidates[0]!;
       if (existsSync(templateSrc)) {
         const { mkdirSync, copyFileSync } = await import('node:fs');
         mkdirSync(skillsDir, { recursive: true });
