@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { createReadStream } from 'node:fs';
 import { BaseSubject } from './base.js';
+import { sanitizeObservationContent } from '../core/security.js';
 import { ORPHAN_SUBJECT, CREATE_KINDS } from '../core/interfaces.js';
 import type { Cluster, Observation, Patch, Proposal, ValidationResult } from '../core/types.js';
 import type { LLMClient } from '../core/llm.js';
@@ -348,7 +349,7 @@ export class SkillsSubject extends BaseSubject {
           session_id: sessionId,
           observed_at: ts,
           signal_type: 'correction',
-          verbatim: nextUserText.slice(0, 200),
+          verbatim: sanitizeObservationContent(nextUserText.slice(0, 200)),
           metadata: { skill_name: attributed, trigger: text.slice(0, 100) },
         });
       } else if (nextUserText && this.posRe.test(nextUserText)) {
@@ -356,7 +357,7 @@ export class SkillsSubject extends BaseSubject {
           session_id: sessionId,
           observed_at: ts,
           signal_type: 'positive_feedback',
-          verbatim: nextUserText.slice(0, 200),
+          verbatim: sanitizeObservationContent(nextUserText.slice(0, 200)),
           metadata: { skill_name: matchedSkill },
         });
       }
@@ -387,7 +388,7 @@ export class SkillsSubject extends BaseSubject {
   }
 
   private async proposeNewSkill(cluster: Cluster): Promise<Proposal> {
-    const evidence = cluster.observations.slice(0, 6).map(o => '- ' + o.verbatim).join('\n');
+    const evidence = cluster.observations.slice(0, 6).map(o => '- ' + sanitizeObservationContent(o.verbatim)).join('\n');
     const targetPath = join(this.scanDirs[0]!.replace(/^~/, homedir()), ORPHAN_SKILL + '.md');
 
     const alternatives = this.llm
@@ -412,7 +413,7 @@ export class SkillsSubject extends BaseSubject {
     const skillPath = skillInfo?.path ?? join(this.scanDirs[0]!, skillName + '.md');
     const skillContent = skillInfo?.content ?? '(content not found)';
     const evidence = cluster.observations.slice(0, 6)
-      .map(o => '- [' + o.signal_type + '] ' + o.verbatim).join('\n');
+      .map(o => '- [' + o.signal_type + '] ' + sanitizeObservationContent(o.verbatim)).join('\n');
 
     const alternatives = this.llm
       ? await this.llmPropose(skillName, skillContent, evidence, cluster).catch(() => this.fallbackAlternatives(skillName, skillContent))
