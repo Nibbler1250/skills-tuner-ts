@@ -167,6 +167,23 @@ and a signed proposal record.
 
 ---
 
+## Migrating from the Python implementation
+
+If you have an existing `~/.config/tuner/proposals.jsonl` from the Python `skills-tuner` package, run the one-shot migration script:
+
+1. Stop the Python cron job (`crontab -e`, remove tuner entry)
+2. Uninstall the Python package: `pip uninstall skills-tuner`
+3. Run the migration (dry-run first):
+   ```bash
+   bun run migrate -- --dry-run   # preview changes
+   bun run migrate                # apply migration
+   ```
+4. Verify: `tuner doctor` and `tuner stats`
+
+The script backs up the original file to `proposals.jsonl.python-backup-<timestamp>` before writing. All proposals are re-signed with the current HMAC secret.
+
+---
+
 ## Development
 
 ```bash

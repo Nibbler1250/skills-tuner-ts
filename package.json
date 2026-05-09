@@ -11,7 +11,8 @@
     "typecheck": "bunx tsc --noEmit",
     "lint": "bunx biome check src tests",
     "build": "bunx tsc",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "migrate": "bun run scripts/migrate-from-python.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
