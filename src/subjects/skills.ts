@@ -539,4 +539,84 @@ export class SkillsSubject extends BaseSubject {
       { id: 'C', label: 'With explicit triggers (verbose)', diff_or_content: fmBlock + body, tradeoff: 'Frontmatter normalized; body unchanged' },
     ];
   }
+
+  // ── Migration helpers ──
+
+  /** List skills that are still in legacy flat format — migration candidates. */
+  async listMigrationCandidates(): Promise<string[]> {
+    const skills = await this.loadSkillsMap();
+    return [...skills.values()]
+      .filter(s => s.format === 'flat')
+      .map(s => (s.frontmatter['name'] as string | undefined) ?? basename(s.path, '.md'));
+  }
+
+  /**
+   * Convert a flat skill file to Anthropic directory format (<name>/SKILL.md).
+   * Strips tuner-specific fields (triggers, risk_tier, auto_merge*) from frontmatter.
+   * Returns the stripped fields so the caller can persist them to config.yaml.
+   * Backs up the original flat file with a .pre-migration-<ts>.bak suffix before removing it.
+   */
+  async migrateSkillToDirectory(skillName: string): Promise<Record<string, unknown>> {
+    // Validate skillName before any FS operations
+    if (/[/\\]/.test(skillName) || skillName === '..' || skillName === '.') {
+      throw new Error('Invalid skill name for migration: ' + skillName);
+    }
+
+    const skills = await this.loadSkillsMap();
+    const skill = skills.get(skillName);
+    if (!skill) throw new Error('Skill ' + skillName + ' not found');
+    if (skill.format === 'directory') return {};  // already migrated
+
+    const flatPath = skill.path;
+    const baseDir = dirname(flatPath);
+    const newDir = join(baseDir, skillName);
+    const newPath = join(newDir, 'SKILL.md');
+
+    // Path containment: newDir must be inside an allowed scanDir
+    const allowed = this.scanDirs.map(d => resolve(d.replace(/^~/, homedir())));
+    const newDirReal = resolve(newDir);
+    if (!allowed.some(d => newDirReal === d || newDirReal.startsWith(d + sep) || newDirReal.startsWith(d + '/'))) {
+      throw new Error('Migration target ' + newDirReal + ' outside scan_dirs');
+    }
+
+    if (existsSync(newDir)) {
+      throw new Error('Cannot migrate: ' + newDir + ' already exists');
+    }
+
+    const TUNER_FIELDS = ['triggers', 'trigger', 'risk_tier', 'auto_merge', 'auto_merge_default'];
+    const cleanedFrontmatter: Record<string, unknown> = {};
+    const movedToConfig: Record<string, unknown> = {};
+
+    for (const [k, v] of Object.entries(skill.frontmatter)) {
+      if (TUNER_FIELDS.includes(k)) {
+        movedToConfig[k] = v;
+      } else {
+        cleanedFrontmatter[k] = v;
+      }
+    }
+
+    // Serialize cleaned frontmatter to YAML (simple key: value, arrays as JSON for safety)
+    const fmLines = Object.entries(cleanedFrontmatter).map(([k, v]) => {
+      if (typeof v === 'string' && !v.includes('\n') && !v.includes(':') && !v.includes('"')) {
+        return k + ': ' + v;
+      }
+      return k + ': ' + JSON.stringify(v);
+    });
+    const newContent = '---\n' + fmLines.join('\n') + '\n---\n\n' + skill.content;
+
+    // Write backup BEFORE making any changes (if write fails later, original is intact)
+    const backupPath = flatPath + '.pre-migration-' + Date.now() + '.bak';
+    await copyFile(flatPath, backupPath);
+
+    // Create directory and write SKILL.md
+    await mkdir(newDir, { recursive: true });
+    await writeFile(newPath, newContent, 'utf8');
+
+    // Remove original flat file — backup already safe
+    const { unlink } = await import('node:fs/promises');
+    await unlink(flatPath);
+
+    this.skillsCache = null;
+    return movedToConfig;
+  }
 }

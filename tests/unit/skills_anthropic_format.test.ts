@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SkillsSubject } from '../../src/subjects/skills.js';
@@ -149,5 +149,159 @@ describe('SkillsSubject — Anthropic format', () => {
       'bare-skill': { triggers: ['bare-skill'] },
     });
     expect(matched).toBe('bare-skill');
+  });
+
+  // ── validate() tests ──
+
+  test('validate rejects new_skill missing description', async () => {
+    const result = await subject.validate({
+      target_path: join(dir, 'x.md'),
+      kind: 'new_skill',
+      applied_content: '---\nname: test-skill\n---\n\n# No description\n',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain('description');
+  });
+
+  test('validate rejects new_skill missing frontmatter entirely', async () => {
+    const result = await subject.validate({
+      target_path: join(dir, 'x.md'),
+      kind: 'new_skill',
+      applied_content: '# Just a heading\n\nNo frontmatter.\n',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain('frontmatter');
+  });
+
+  test('validate accepts new_skill with name and description', async () => {
+    const result = await subject.validate({
+      target_path: join(dir, 'x.md'),
+      kind: 'new_skill',
+      applied_content: '---\nname: good-skill\ndescription: Does the thing when needed.\n---\n\n# Good Skill\n',
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  // ── migrateSkillToDirectory() tests ──
+
+  test('migrateSkillToDirectory converts flat to directory format', async () => {
+    writeFileSync(join(dir, 'my-skill.md'), '---\nname: my-skill\ndescription: Test skill.\ntriggers: my-skill\n---\n\n# My Skill\n');
+
+    const moved = await subject.migrateSkillToDirectory('my-skill');
+
+    // New directory and SKILL.md created
+    expect(existsSync(join(dir, 'my-skill'))).toBe(true);
+    expect(existsSync(join(dir, 'my-skill', 'SKILL.md'))).toBe(true);
+    // triggers moved to config
+    expect(moved['triggers']).toBe('my-skill');
+  });
+
+  test('migrateSkillToDirectory strips all tuner-specific fields from frontmatter', async () => {
+    writeFileSync(join(dir, 'fancy.md'), '---\nname: fancy\ndescription: Fancy skill.\ntriggers: /fancy\nrisk_tier: medium\nauto_merge: true\nauto_merge_default: false\n---\n\n# Fancy\n');
+
+    const moved = await subject.migrateSkillToDirectory('fancy');
+
+    // All tuner fields moved
+    expect(moved['triggers']).toBe('/fancy');
+    expect(moved['risk_tier']).toBe('medium');
+    expect(moved['auto_merge']).toBe(true);
+    expect(moved['auto_merge_default']).toBe(false);
+
+    // SKILL.md content should NOT contain those fields
+    const { readFileSync } = await import('node:fs');
+    const content = readFileSync(join(dir, 'fancy', 'SKILL.md'), 'utf8');
+    expect(content).toContain('name: fancy');
+    expect(content).toContain('description:');
+    expect(content).not.toContain('triggers');
+    expect(content).not.toContain('risk_tier');
+    expect(content).not.toContain('auto_merge');
+  });
+
+  test('migrateSkillToDirectory preserves skill body content', async () => {
+    writeFileSync(join(dir, 'body-test.md'), '---\nname: body-test\ndescription: Has body.\n---\n\n# Body Test\n\nThis content must survive migration.\n');
+
+    await subject.migrateSkillToDirectory('body-test');
+
+    const { readFileSync } = await import('node:fs');
+    const content = readFileSync(join(dir, 'body-test', 'SKILL.md'), 'utf8');
+    expect(content).toContain('This content must survive migration.');
+  });
+
+  test('migrateSkillToDirectory creates .pre-migration-*.bak backup of flat file', async () => {
+    writeFileSync(join(dir, 'backup-test.md'), '---\nname: backup-test\ndescription: Needs backup.\n---\n\n# Backup Test\n');
+
+    await subject.migrateSkillToDirectory('backup-test');
+
+    // A .pre-migration-*.bak file must exist in dir
+    const files = readdirSync(dir);
+    const bak = files.find(f => f.startsWith('backup-test.md.pre-migration-') && f.endsWith('.bak'));
+    expect(bak).toBeTruthy();
+    // Original flat file must be gone
+    expect(existsSync(join(dir, 'backup-test.md'))).toBe(false);
+  });
+
+  test('migrateSkillToDirectory no-op if skill already in directory format', async () => {
+    const skillDir = join(dir, 'already-dir');
+    mkdirSync(skillDir);
+    writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: already-dir\ndescription: Already directory.\n---\n\n# Already\n');
+
+    const moved = await subject.migrateSkillToDirectory('already-dir');
+    expect(moved).toEqual({});
+    // Directory still exists
+    expect(existsSync(join(skillDir, 'SKILL.md'))).toBe(true);
+  });
+
+  test('migrateSkillToDirectory throws if target directory already exists', async () => {
+    writeFileSync(join(dir, 'conflict.md'), '---\nname: conflict\ndescription: Will conflict.\n---\n\n# Conflict\n');
+    // Create the directory that would be the migration target
+    mkdirSync(join(dir, 'conflict'));
+
+    await expect(subject.migrateSkillToDirectory('conflict')).rejects.toThrow('already exists');
+  });
+
+  test('migrateSkillToDirectory rejects path traversal in skillName', async () => {
+    await expect(subject.migrateSkillToDirectory('../evil')).rejects.toThrow('Invalid skill name');
+    await expect(subject.migrateSkillToDirectory('a/b')).rejects.toThrow('Invalid skill name');
+  });
+
+  test('migrateSkillToDirectory throws if skill not found', async () => {
+    await expect(subject.migrateSkillToDirectory('nonexistent')).rejects.toThrow('not found');
+  });
+
+  test('migrateSkillToDirectory invalidates skills cache', async () => {
+    writeFileSync(join(dir, 'cache-test.md'), '---\nname: cache-test\ndescription: Cache invalidation.\n---\n\n# Cache\n');
+
+    // Prime cache via collectObservations
+    await subject.collectObservations(new Date(0));
+
+    await subject.migrateSkillToDirectory('cache-test');
+
+    // After migration, collecting observations should use new directory format
+    // (no crash = cache invalidated and reloaded correctly)
+    await expect(subject.collectObservations(new Date(0))).resolves.toBeDefined();
+    expect(existsSync(join(dir, 'cache-test', 'SKILL.md'))).toBe(true);
+  });
+
+  // ── listMigrationCandidates() tests ──
+
+  test('listMigrationCandidates returns only flat skills', async () => {
+    // One flat, one directory
+    writeFileSync(join(dir, 'flat-one.md'), '---\nname: flat-one\ntriggers: flat-one\n---\n# Flat\n');
+    const skillDir = join(dir, 'dir-one');
+    mkdirSync(skillDir);
+    writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: dir-one\ndescription: Directory format.\n---\n# Dir\n');
+
+    const candidates = await subject.listMigrationCandidates();
+    expect(candidates).toContain('flat-one');
+    expect(candidates).not.toContain('dir-one');
+  });
+
+  test('listMigrationCandidates returns empty if all directory format', async () => {
+    const skillDir = join(dir, 'all-dir');
+    mkdirSync(skillDir);
+    writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: all-dir\ndescription: All good.\n---\n# Dir\n');
+
+    const candidates = await subject.listMigrationCandidates();
+    expect(candidates).toHaveLength(0);
   });
 });

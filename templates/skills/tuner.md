@@ -99,6 +99,55 @@ If user picks `other` → ask path → init if needed.
 
 Save the choice as `storage.git_repo` in config.
 
+### Step 2.5 — Scan for legacy flat skills and offer migration
+
+After confirming the git repo, scan the skills directory for legacy flat `.md` files:
+
+```bash
+find "$scan_dir" -maxdepth 1 -name "*.md" ! -name "*.bak"
+# vs
+find "$scan_dir" -maxdepth 2 -name "SKILL.md"
+```
+
+Show a summary:
+
+```
+🔍 Skills format scan:
+  ✅ canslim-screener/SKILL.md  (Anthropic directory format)
+  ✅ ftd-detector/SKILL.md      (Anthropic directory format)
+  ⚠️  find-trading-edge.md      (legacy flat format)
+  ⚠️  daily-brief.md            (legacy flat format)
+  ⚠️  archiviste.md             (legacy flat format)
+
+3 legacy skills detected. Migrate to Anthropic directory format now? [yes/no/later]
+```
+
+If **yes**: for each flat skill in order:
+1. Read frontmatter + body
+2. Strip tuner-specific fields (`triggers`, `risk_tier`, `auto_merge`, `auto_merge_default`) from frontmatter
+3. Move stripped fields to `~/.config/tuner/config.yaml` under `subjects.skills.overrides.<name>`
+4. Create `<scan_dir>/<name>/SKILL.md` with cleaned frontmatter + body
+5. Backup original flat file as `<name>.md.pre-migration-<timestamp>.bak`
+6. Delete original flat file
+7. Git commit: `migrate: convert <name> to Anthropic SKILL.md format`
+
+Show progress for each skill:
+```
+Migrating find-trading-edge.md → find-trading-edge/SKILL.md... ✅
+Migrating daily-brief.md       → daily-brief/SKILL.md...       ✅
+Migrating archiviste.md        → archiviste/SKILL.md...         ✅
+
+Migration complete. Backups at:
+  ~/agent/skills/find-trading-edge.md.pre-migration-1746000000.bak
+  ...
+
+Config.yaml updated with extracted triggers and risk tiers. Run `tuner doctor` to verify.
+```
+
+If **no** or **later**: skip. Show: "You can migrate later with `/tuner setup` or `/tuner adjust <name>` → option 1."
+
+If **all skills already in directory format**: show "✅ All skills already in Anthropic directory format."
+
 ### Step 3 — Pattern adjustment
 
 Based on the dominant language detected in step 2:
@@ -284,18 +333,41 @@ Display:
 - Recent activity from `audit.jsonl` (proposals, approvals, refusals last 30d)
 - Any pending proposals for this target
 
+### Step 2.5 — Check format and offer migration (for individual skills)
+
+If the target is an individual skill (not a whole subject), check its format:
+
+```bash
+# If SKILL.md inside a directory → directory format ✅
+# If *.md at the top of scan_dir → flat format ⚠️
+```
+
+If flat format, show **before** the adjustment menu:
+
+```
+⚠️  daily-brief is in legacy flat format.
+  Migrate to Anthropic directory format (daily-brief/SKILL.md)? [yes/no]
+```
+
+If **yes**: run migration (same process as setup Step 2.5):
+- Strip tuner fields to config, create directory, backup original, git commit
+- Reload skill state, proceed to adjustment menu on the migrated skill
+
+If **no**: continue with adjustment menu as-is (flat format still supported).
+
 ### Step 3 — Offer adjustment menu
 
 ```
 What would you like to adjust?
-  1. Triggers
-  2. Risk tier
-  3. Auto-merge policy
-  4. Proposer model (Sonnet ↔ Opus ↔ Haiku ↔ ML backend)
-  5. Scan directories
-  6. Emotional/negative/positive patterns
-  7. Cool-down period for this skill
-  8. Disable / enable
+  1. Migrate to Anthropic directory format (recommended) [only shown for legacy flat skills]
+  2. Triggers
+  3. Risk tier
+  4. Auto-merge policy
+  5. Proposer model (Sonnet ↔ Opus ↔ Haiku ↔ ML backend)
+  6. Scan directories
+  7. Emotional/negative/positive patterns
+  8. Cool-down period for this skill
+  9. Disable / enable
 ```
 
 For each, walk through the change, show the diff, ask confirmation, write to config.
@@ -358,6 +430,24 @@ Markdown report sectioned per subject:
 - Survey response rate: 84%
 - Self-modify events: 1 (2026-04-15: simplified setup mode)
 ```
+
+### Step 4.5 — Format compliance
+
+Scan each `scan_dir` for flat `.md` files and directory-format `SKILL.md` files. Add a section to the report:
+
+```
+## Format compliance
+- 12 skills total
+- 9 directory format (Anthropic standard) ✅
+- 3 legacy flat format ⚠️
+  - daily-brief.md
+  - archiviste.md
+  - claudeclaw-digest.md
+
+Run /tuner adjust <name> to migrate individually, or /tuner setup to migrate all.
+```
+
+If all skills are in directory format: `✅ All 12 skills in Anthropic directory format.`
 
 ### Step 5 — Compare vs reflection baseline
 
