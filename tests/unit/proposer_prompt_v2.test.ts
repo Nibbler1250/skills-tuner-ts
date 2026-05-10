@@ -78,6 +78,9 @@ expect(llm.capturedUser).toContain('behavior-changing');
       expect(llm.capturedSystem).toContain('DIFFERENT angle');
       expect(llm.capturedSystem).toContain("'name' and 'description'");
       expect(llm.capturedSystem).toContain('en');
+      // v2.1 — named taxonomy + explicit cosmetic ban (added after self-tune-prompt audit)
+      expect(llm.capturedSystem).toContain('recurring-workflow-gap');
+      expect(llm.capturedSystem).toContain('Reject cosmetic variants');
     } finally {
       delete process.env['TUNER_AUDIT_PATH'];
       if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
