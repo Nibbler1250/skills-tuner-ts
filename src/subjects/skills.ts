@@ -326,14 +326,6 @@ export class SkillsSubject extends BaseSubject {
     return map;
   }
 
-  // Resolve triggers: config overrides first, frontmatter fallback, skill name last.
-  // Deprecated: triggers in frontmatter — prefer subjects.skills.overrides in config.yaml.
-  private getSkillTriggers(skillName: string, frontmatter: Record<string, unknown>): string[] {
-    const configOverride = this.overrides[skillName]?.triggers;
-    if (Array.isArray(configOverride)) return configOverride;
-    return this.parseTriggers(frontmatter, skillName);
-  }
-
   private parseTriggers(frontmatter: Record<string, unknown>, fallback: string): string[] {
     const raw = frontmatter['triggers'] ?? frontmatter['trigger'];
     if (typeof raw === 'string') return raw.split(',').map(t => t.trim()).filter(Boolean);
