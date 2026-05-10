@@ -368,9 +368,17 @@ What would you like to adjust?
   7. Emotional/negative/positive patterns
   8. Cool-down period for this skill
   9. Disable / enable
+  10. Git repo (where this subject's proposals are committed)
 ```
 
-For each, walk through the change, show the diff, ask confirmation, write to config.
+For option 10 — Git repo:
+- Show current value: `subjects.<name>.git_repo` or "(using storage.git_repo default)".
+- Prompt: "New git repo path for <subject> (or blank to use storage default):"
+- Validate: `git -C <path> rev-parse --is-inside-work-tree` or offer `git init`.
+- Write `subjects.<name>.git_repo: <path>` to config.yaml (or remove key to revert to default).
+- Confirm change and run `tuner doctor`.
+
+For each other option, walk through the change, show the diff, ask confirmation, write to config.
 
 ### Step 4 — Validate + commit config
 
@@ -448,6 +456,28 @@ Run /tuner adjust <name> to migrate individually, or /tuner setup to migrate all
 ```
 
 If all skills are in directory format: `✅ All 12 skills in Anthropic directory format.`
+
+### Step 4.6 — Subject git topology
+
+Read `~/.config/tuner/config.yaml`. For each enabled subject, show:
+
+```
+## Subject git topology
+
+| Subject       | Repo                              | Status |
+|---------------|-----------------------------------|--------|
+| skills        | ~/agent/skills                    | ok git |
+| voice         | ~/agent/voice-config              | ok git |
+| trader-ml-hp  | ~/Projects/momentum_trader_v7     | ok git |
+| archiviste    | (uses storage.git_repo default)   | ok git |
+```
+
+For each subject:
+- Run `git -C <resolved_path> rev-parse --is-inside-work-tree` to verify.
+- If no `git_repo` in subject config: label as "(uses storage.git_repo default)".
+- If subject `scan_dirs` are outside the subject's `git_repo`: flag with warning (proposals would commit outside scan surface).
+
+If any subject uses `storage.git_repo` as default: suggest per-subject isolation via `/tuner adjust <subject>`.
 
 ### Step 5 — Compare vs reflection baseline
 

@@ -6,7 +6,8 @@ import type { TunableSubject } from './interfaces.js';
 import type { Registry } from './registry.js';
 import type { ProposalsStore } from '../storage/proposals.js';
 import type { RefusedStore } from '../storage/refused.js';
-import type { BranchManager } from '../git_ops/branches.js';
+import { BranchManager } from '../git_ops/branches.js';
+import { homedir } from 'node:os';
 
 export class SecurityError extends Error {
   constructor(message: string) {
@@ -18,15 +19,31 @@ export class SecurityError extends Error {
 export class Engine {
   private secret: Buffer;
   private readonly _applying = new Set<number>(); // in-memory lock: prevents concurrent double-apply
+  private readonly _branchManagers = new Map<string, BranchManager>();
 
   constructor(
     public readonly config: TunerConfig,
     public readonly registry: Registry,
     public readonly proposals: ProposalsStore,
     public readonly refused: RefusedStore,
-    public readonly branches: BranchManager,
+    private readonly defaultBranches: BranchManager,
   ) {
     this.secret = loadSecret();
+  }
+
+  // Lazily instantiate a BranchManager per-subject, falling back to defaultBranches.
+  private getBranchManager(subjectName: string): BranchManager {
+    const cached = this._branchManagers.get(subjectName);
+    if (cached) return cached;
+    const subjectCfg = this.config.subjects?.[subjectName];
+    const repoPath = subjectCfg?.git_repo
+      ? subjectCfg.git_repo.replace(/^~/, homedir())
+      : this.defaultBranches.repoPath;
+    const bm = repoPath === this.defaultBranches.repoPath
+      ? this.defaultBranches
+      : new BranchManager(repoPath);
+    this._branchManagers.set(subjectName, bm);
+    return bm;
   }
 
   async runCycle(opts: { since?: Date; subjectName?: string; dryRun?: boolean } = {}): Promise<{ proposed: number; autoApplied: number }> {
@@ -136,7 +153,8 @@ export class Engine {
     const subject = this.registry.getSubject(proposal.subject);
     if (!subject) throw new Error(`Subject ${proposal.subject} not registered`);
 
-    auditLog('apply_attempted', { proposal_id: proposalId, alternative_id: alternativeId });
+    const branches = this.getBranchManager(proposal.subject);
+    auditLog('apply_attempted', { proposal_id: proposalId, alternative_id: alternativeId, repo_path: branches.repoPath });
 
     if (!verifyProposalSignature(proposal, this.secret)) {
       auditLog('signature_mismatch', { proposal_id: proposalId });
@@ -151,8 +169,8 @@ export class Engine {
       throw new Error(`Validation failed: ${validation.reason ?? 'unknown'}`);
     }
 
-    await this.branches.createProposalBranch(proposalId);
-    const commitSha = await this.branches.commitPatch(patch, proposal, alternativeId);
+    await branches.createProposalBranch(proposalId);
+    const commitSha = await branches.commitPatch(patch, proposal, alternativeId);
 
     this.proposals.append({
       proposal,
@@ -162,7 +180,7 @@ export class Engine {
       commit_sha: commitSha,
       applied_target_path: patch.target_path,
     });
-    auditLog('apply_success', { proposal_id: proposalId, alternative_id: alternativeId, commit_sha: commitSha });
+    auditLog('apply_success', { proposal_id: proposalId, alternative_id: alternativeId, commit_sha: commitSha, repo_path: branches.repoPath });
   }
 
   async refuseProposal(proposalId: number, reason = 'refuse'): Promise<void> {
@@ -182,11 +200,14 @@ export class Engine {
     const commitSha = (appliedRecord as typeof appliedRecord & { commit_sha?: string }).commit_sha;
     if (!commitSha) throw new Error(`No commit SHA recorded for proposal #${proposalId}`);
 
+    const proposal = appliedRecord.proposal;
+    const branches = this.getBranchManager(proposal.subject);
+
     try {
       // Checkout the proposal branch so revert applies in the right context
-      await this.branches.checkoutProposalBranch(proposalId);
-      await this.branches.revertPatch(commitSha);
-      auditLog('reverted', { proposal_id: proposalId, commit_sha: commitSha });
+      await branches.checkoutProposalBranch(proposalId);
+      await branches.revertPatch(commitSha);
+      auditLog('reverted', { proposal_id: proposalId, commit_sha: commitSha, repo_path: branches.repoPath });
     } catch (err) {
       auditLog('revert_failed', { proposal_id: proposalId, commit_sha: commitSha, error: String(err) });
       throw err;
