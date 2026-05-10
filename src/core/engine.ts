@@ -8,6 +8,10 @@ import type { ProposalsStore } from '../storage/proposals.js';
 import type { RefusedStore } from '../storage/refused.js';
 import { BranchManager } from '../git_ops/branches.js';
 import { homedir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+
+const STATE_HASHES_PATH = join(homedir(), '.config', 'tuner', 'state-hashes.jsonl');
 
 export class SecurityError extends Error {
   constructor(message: string) {
@@ -64,7 +68,47 @@ export class Engine {
         console.error(`Error running subject ${subject.name}:`, err);
       }
     }
+    // Drift detection: compare each subject's state hash vs last recorded value
+    const allSubjects = opts.subjectName
+      ? [this.registry.getSubject(opts.subjectName)].filter((s): s is TunableSubject => s != null)
+      : this.registry.enabledSubjects(this.config);
+    for (const subject of allSubjects) {
+      try {
+        const currentHash = subject.currentStateHash();
+        if (!currentHash) continue;  // subject opted out (empty string = no-op)
+        const prevHash = this._lastStateHash(subject.name);
+        if (prevHash === currentHash) continue;  // no drift
+        auditLog('subject_state_drift_detected', {
+          subject: subject.name,
+          prev_hash: prevHash || null,
+          current_hash: currentHash,
+        });
+        this._recordStateHash(subject.name, currentHash);
+      } catch (err) {
+        auditLog('drift_detection_error', { subject: subject.name, error: String(err) });
+        // Non-fatal: drift detection is opportunistic, never crashes runCycle
+      }
+    }
+
     return totals;
+  }
+
+  private _lastStateHash(subjectName: string): string {
+    if (!existsSync(STATE_HASHES_PATH)) return '';
+    const lines = readFileSync(STATE_HASHES_PATH, 'utf8').trim().split('\n').filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry = JSON.parse(lines[i]!);
+        if (entry.subject === subjectName) return entry.hash || '';
+      } catch { /* skip corrupted line */ }
+    }
+    return '';
+  }
+
+  private _recordStateHash(subjectName: string, hash: string): void {
+    mkdirSync(dirname(STATE_HASHES_PATH), { recursive: true });
+    const entry = { ts: new Date().toISOString(), subject: subjectName, hash };
+    appendFileSync(STATE_HASHES_PATH, JSON.stringify(entry) + '\n');
   }
 
   private async _runSubject(subjectName: string, since: Date, dryRun: boolean): Promise<{ proposed: number; autoApplied: number }> {

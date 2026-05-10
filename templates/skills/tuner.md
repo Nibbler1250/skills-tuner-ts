@@ -70,6 +70,8 @@ Tell the user in 3 sentences:
 
 Ask if they want to proceed (yes/no). If no, exit gracefully.
 
+**Drift detection**: Each cron tick, the tuner computes a state hash per subject. Changes to scan_dirs files, plugin registrations, etc. are detected and surfaced in the next `/tuner audit` run. Subjects opt-in by implementing `currentStateHash()` — default is no-op (empty string).
+
 ### Step 2 — Detect the git repo
 
 Scan candidate locations:
@@ -479,13 +481,33 @@ For each subject:
 
 If any subject uses `storage.git_repo` as default: suggest per-subject isolation via `/tuner adjust <subject>`.
 
-### Step 5 — Compare vs reflection baseline
+### Step 5 — Drift detection summary
+
+Read `~/.config/tuner/state-hashes.jsonl` and recent `audit.jsonl` entries (last 30 days).
+
+For each enabled subject, find the most recent `subject_state_drift_detected` event:
+
+```
+## Subject state drift
+
+| Subject       | Last drift detected     | Action             |
+|---------------|-------------------------|--------------------|
+| skills        | none in last 30d        | stable             |
+| voice         | 2026-05-09 03:00        | scan_dirs changed since last audit |
+| trader-ml-hp  | 2026-05-08 03:00        | strategies/ updated since last audit |
+| archiviste    | none                    | stable             |
+```
+
+For each subject with recent drift, suggest:
+> State changed since last audit for `<subject>`. Run `/tuner adjust <subject>` to review and refresh.
+
+### Step 6 — Compare vs reflection baseline
 
 Read `reflection-baseline.md` — the user answers from setup. For each "what I wish improved" item:
 - Did the tuner detect related patterns? (search audit log for matching keywords)
 - Show: "Goal '<verbatim>' → 0 / 3 / 12 related proposals so far. Try `/tuner adjust` to refine triggers if 0."
 
-### Step 6 — Suggested next actions
+### Step 7 — Suggested next actions
 
 Based on metrics, output 1-3 concrete suggestions:
 - "Approval rate on `voice` is 100% — enable auto_merge?"

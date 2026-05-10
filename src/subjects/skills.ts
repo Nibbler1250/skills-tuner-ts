@@ -1,5 +1,6 @@
 import { writeFile, copyFile, mkdir, readdir } from 'node:fs/promises';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline';
@@ -619,4 +620,45 @@ export class SkillsSubject extends BaseSubject {
     this.skillsCache = null;
     return movedToConfig;
   }
+
+  currentStateHash(): string {
+    const items: string[] = [];
+    for (const dir of this.scanDirs) {
+      const expanded = dir.replace(/^~/, homedir());
+      if (!existsSync(expanded)) continue;
+      const entries = walkSkillFiles(expanded);
+      for (const e of entries) {
+        items.push(`${e.relPath}\t${e.mtimeMs}\t${e.size}`);
+      }
+    }
+    items.sort();
+    return createHash('sha256').update(items.join('\n')).digest('hex');
+  }
+}
+
+function walkSkillFiles(dir: string): Array<{ relPath: string; mtimeMs: number; size: number }> {
+  const result: Array<{ relPath: string; mtimeMs: number; size: number }> = [];
+  function recurse(current: string, prefix: string) {
+    let names: string[];
+    try { names = readdirSync(current); } catch { return; }
+    for (const name of names) {
+      if (typeof name !== 'string') continue;
+      const full = join(current, name);
+      const rel = prefix ? join(prefix, name) : name;
+      let isDir = false;
+      try {
+        isDir = statSync(full).isDirectory();
+      } catch { continue; }
+      if (isDir) {
+        recurse(full, rel);
+      } else if (name.endsWith('.md') && !name.includes('.bak')) {
+        try {
+          const st = statSync(full);
+          result.push({ relPath: rel, mtimeMs: st.mtimeMs, size: st.size });
+        } catch { /* skip unreadable */ }
+      }
+    }
+  }
+  recurse(dir, '');
+  return result;
 }

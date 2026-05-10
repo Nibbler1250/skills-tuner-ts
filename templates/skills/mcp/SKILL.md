@@ -252,6 +252,13 @@ Recent errors:
 14:25:33 greg-voice tool_error: zod validation (request_id=def012)
 ```
 
+### Step 4.5 — Drift since last cron
+
+Check `~/.config/tuner/state-hashes.jsonl` for recent `subject_state_drift_detected` entries with `subject == "mcp"` (if `MCPSubject` is implemented) or related plugin subjects.
+
+If MCPSubject not yet implemented, note:
+> Drift detection for MCP plugins requires a future `MCPSubject` implementation. Manual `/mcp audit` invocation surfaces current state — automatic drift between audits will land when MCPSubject is added and `currentStateHash()` is implemented to hash `/api/plugin/list`.
+
 End audit.
 
 ---
