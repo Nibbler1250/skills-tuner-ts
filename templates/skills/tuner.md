@@ -176,24 +176,74 @@ End setup.
 
 Goal: when the user creates a new skill (via Claude Code native skill flow or manually), this mode complements that by registering the skill with the tuner.
 
-### Step 1 — Read the new skill
+**Note:** The skills-tuner supports two formats:
+- **Directory format** (Anthropic standard, recommended): `<scan_dir>/<name>/SKILL.md` with frontmatter `name:` and `description:` only.
+- **Flat format** (legacy): `<scan_dir>/<name>.md` with full frontmatter including `triggers:`.
+
+For new skills, always prefer the directory format. Triggers and risk configuration belong in `~/.config/tuner/config.yaml` under `subjects.skills.overrides`, not in the skill file frontmatter.
+
+### Step 1 — Choose format
+
+Ask: "Format for this new skill: directory (recommended, Anthropic standard) or flat .md (legacy)?"
+
+- **directory** → scaffold `<scan_dir>/<name>/SKILL.md`
+- **flat** → create `<scan_dir>/<name>.md` (only if user specifically requests for compatibility)
+
+If directory: ask "Bundle helper scripts? (scaffolds an empty `scripts/` subdirectory)" — yes/no.
+
+### Step 2 — Read or identify the new skill
 
 Detect which skill the user just created:
-- Check `git status` of `storage.git_repo` for new `.md` files
+- Check `git status` of `storage.git_repo` for new `.md` or `SKILL.md` files
 - Or ask: "Which skill did you just create? (path or name)"
 
 Read its frontmatter and content.
 
-### Step 2 — Suggest triggers
+### Step 3 — Frontmatter focus: name + description
 
-If `triggers:` is empty or weak (1-2 generic words):
+The Anthropic standard requires only two frontmatter fields for discovery:
 
-1. Sample 5-10 verbatims that would plausibly invoke this skill, based on its content.
-2. Show suggestions inline.
+```yaml
+---
+name: <skill-name>
+description: <what the skill does and when to use it — used by Claude Code skill matcher>
+---
+```
+
+The `description` is the most important field: Claude Code uses it to automatically discover and load relevant skills. It should start with what the skill does and when to use it (e.g. "Checks service health and system status. Use when asked about infrastructure, services, or system monitoring.").
+
+If the skill file already has `triggers:` or `risk_tier:` in frontmatter: inform the user that these fields are deprecated in the Anthropic format and should move to config.yaml (see Step 4).
+
+### Step 4 — Tuner-specific config in config.yaml (not frontmatter)
+
+If the user wants to configure triggers, risk_tier, or auto_merge for this skill, add them to `~/.config/tuner/config.yaml` under `subjects.skills.overrides`:
+
+```yaml
+subjects:
+  skills:
+    overrides:
+      <skill-name>:
+        triggers:
+          - /my-trigger
+          - my keyword
+        risk_tier: medium        # low | medium | high | critical
+        auto_merge_default: false
+    scan_dirs:
+      - <ensure the new skill parent dir is listed>
+```
+
+Show the proposed config block and ask confirmation before writing.
+
+### Step 5 — Suggest triggers (for config, not frontmatter)
+
+If no triggers are configured yet:
+
+1. Sample 5-10 verbatims that would plausibly invoke this skill, based on its name and description.
+2. Show suggestions as a config.yaml `overrides` block (not frontmatter).
 3. Ask user to accept/edit/reject.
-4. Edit the frontmatter to add the triggers.
+4. Write to config.yaml under `subjects.skills.overrides.<name>.triggers`.
 
-### Step 3 — Suggest risk_tier
+### Step 6 — Suggest risk_tier (for config)
 
 Based on the skill domain:
 
@@ -202,21 +252,9 @@ Based on the skill domain:
 - Network/API calls, sending messages, financial operations → `high`
 - Self-modification of the tuner itself → `critical`
 
-Show recommendation, ask confirmation.
+Show recommendation, ask confirmation. Write to `subjects.skills.overrides.<name>.risk_tier` in config.
 
-### Step 4 — Update tuner config
-
-Add or update the subject entry in `~/.config/tuner/config.yaml`:
-
-```yaml
-subjects:
-  skills:
-    auto_merge: <inherited from setup risk philosophy>
-    scan_dirs:
-      - <ensure the new skill parent dir is listed>
-```
-
-### Step 5 — Domain-specific pattern hints
+### Step 7 — Domain-specific pattern hints
 
 If the skill is in a specialized domain, suggest adding domain words to `_EMOTIONAL_PATTERNS`:
 
@@ -227,7 +265,6 @@ If the skill is in a specialized domain, suggest adding domain words to `_EMOTIO
 User confirms before adding.
 
 End create.
-
 ---
 
 ## Mode: adjust

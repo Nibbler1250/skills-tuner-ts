@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SkillsSubject, ORPHAN_SKILL, DEFAULT_EMOTIONAL_PATTERNS } from '../../src/subjects/skills.js';
@@ -186,8 +186,9 @@ describe('SkillsSubject.apply', () => {
   });
 
   test('collision adds timestamp suffix', async () => {
-    const existingPath = join(dir, 'my-skill.md');
-    writeFileSync(existingPath, '# existing');
+    // directory format: collision is detected on the directory, not the flat file
+    const existingDir = join(dir, 'my-skill');
+    mkdirSync(existingDir, { recursive: true });
     const proposal = {
       id: 1, cluster_id: 'c1', subject: 'skills', kind: 'new_skill',
       target_path: join(dir, '__new_entity__.md'),
@@ -195,8 +196,8 @@ describe('SkillsSubject.apply', () => {
       pattern_signature: 'sig', created_at: new Date(),
     };
     const patch = await subject.apply(proposal, 'A');
-    expect(patch.target_path).not.toBe(existingPath);
-    expect(patch.target_path).toMatch(/-\d+\.md$/);
+    expect(patch.target_path).not.toContain(existingDir + '/SKILL.md');
+    expect(patch.target_path).toMatch(/my-skill-\d+\/SKILL\.md$/);
   });
 
   test('rejects path outside scan_dirs', async () => {
@@ -235,14 +236,16 @@ describe('SkillsSubject.validate', () => {
     expect(result.reason).toContain('frontmatter');
   });
 
-  test('rejects new_skill without triggers', async () => {
+  test('rejects new_skill without description', async () => {
+    // Anthropic format requires name + description; triggers are optional (go in config)
     const result = await subject.validate({ target_path: '/tmp/x.md', kind: 'new_skill', applied_content: '---\nname: test\n---\n\n# body' });
     expect(result.valid).toBe(false);
-    expect(result.reason).toContain('triggers');
+    expect(result.reason).toContain('description');
   });
 
   test('accepts new_skill with valid frontmatter', async () => {
-    const result = await subject.validate({ target_path: '/tmp/x.md', kind: 'new_skill', applied_content: '---\nname: test\ntriggers: test\n---\n\n# body' });
+    // Anthropic format: name + description required; triggers optional
+    const result = await subject.validate({ target_path: '/tmp/x.md', kind: 'new_skill', applied_content: '---\nname: test\ndescription: Does the thing when needed.\n---\n\n# body' });
     expect(result.valid).toBe(true);
   });
 
